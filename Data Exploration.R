@@ -28,6 +28,3 @@ health.data = health.data %>% mutate(BPSysAve) = ifelse(is.na(BPSysAve),Median(B
 
 
 sapply(health.data.function(x) lenght(unique(x)))
-
-
-##
