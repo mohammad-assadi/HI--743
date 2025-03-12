@@ -1,161 +1,295 @@
 ---
 title: "Linear Regression in R"
-author: "Mohammad Assadi"
-date: "2025-02-20"
+author: "Mohammad Assadi Shalmani"
+date: "`r Sys.Date()`"
 output: html_document
 ---
 
+## Analysis of Boston Housing Data
+
+The purpose of this report is to model median home values in Boston suburbs using linear regression. The analysis first employs a simple regression that uses a single predictor, the percentage of lower status residents (`lstat`), and then extends the analysis by incorporating housing age (`age`) into a multiple regression model. This approach helps reveal how socioeconomic status and the age of properties influence housing prices.
+
+The Boston dataset consists of 506 observations with 13 variables that describe various suburban characteristics. These variables include the per capita crime rate (`crim`), the proportion of residential land allocated for large lots (`zn`), the proportion of non-retail business areas (`indus`), a dummy variable indicating proximity to the Charles River (`chas`), the concentration of nitrogen oxides (`nox`), the average number of rooms per dwelling (`rm`), the proportion of houses built before 1940 (`age`), weighted distances to employment centers (`dis`), an index of highway accessibility (`rad`), the property tax rate per \$10,000 (`tax`), the pupil-teacher ratio (`ptratio`), the percentage of lower status residents (`lstat`), and the median home value in \$1000s (`medv`).
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
 library(tidyverse)
 
-installed.packages("ISLR2")
+# install.packages("ISLR2")
 library(ISLR2)
-```
 
-# BOSTON DATASET ANALYSIS
-
-
-
-
-\<What are we analyzing?Why ?What insighy can we gain from this?\
-
-### Data Understand and preparation
-
-insight
-
-### Data Exploration
 
 ```{r load.data}
 data(Boston)
 glimpse(Boston)
 
+```
 
+```{r}
 summary(Boston)
 ```
 
-```{r missing_value}
-missing_values = Boston %>% 
-  summarise(across(everything(),~sum(is.na(.))))
-print(missing_values)
+```{r missing values}
 
+missing_values = Boston %>%
+  summarise(across(everything(), ~ sum(is.na(.))))
+print(missing_values)
 ```
 
 ## Train-Test Split
 
-\<How does this technique aid our analysis, especially given new data?\>\
-
-```{r train_test}
-set.seed(123)  #reproducibilty
-Boston_split = Boston %>% 
-  mutate(id=row_number()) %>% 
+To evaluate the model reliably, the dataset is split into a training set (75% of the data) and a testing set (25% of the data). This approach ensures that the model’s performance can be assessed on new data.
+```{r}
+set.seed(123) # for reproducibility
+Boston_split = Boston %>%
+  mutate(id = row_number()) %>%
   sample_frac(0.75)
 
-Boston = Boston %>% mutate(id=row_number())
+Boston = Boston %>% mutate(id = row_number())
 
-train_data=Boston_split
-test_data=anti_join(Boston,Boston_split,by="id") # 25 remaining
-
-
+train_data = Boston_split
+test_data = anti_join(Boston, Boston_split, by ="id") #Remaining 25%
 ```
 
-### EDA
+### Exploratory Data Analysis
 
-What figures did we build and why what information did it convey? how is it important to the analysis
+A histogram is created to illustrate the distribution of median home values. With a bin width of 2 and styling that uses a steelblue fill with white borders, the histogram shows that most homes are clustered around the mid-price range, although there is a tail that extends towards higher values.
 
 ```{r histogram for medv}
-ggplot(Boston,aes(x=medv))+
-  geom_histogram(fill="steelblue",binwidth = 2, color="white")+
-  labs(title = "Distribution of median home values",
-       x="Median values",
-       y="count")
-  
+ggplot(Boston, aes(x = medv)) +
+  geom_histogram(fill = "steelblue", binwidth = 2, color="white") +
+  labs(title = "Distribution of Median Home Values",
+       x = "Median Value($1000s)",
+       y = "Count") +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
-```{r LSTAT vs Medv scatterplot}
-ggplot(Boston,aes(x=lstat,y=medv))+
-  geom_point(alpha=0.6,color="blue")+
-  labs(title="Scatterplot:Lstat bs medv",
-       x="percent lower state populaton",
-       y="Median")
+A scatterplot is used to display the relationship between the percentage of lower status residents (lstat) and the median home values (medv). The blue, semi-transparent points demonstrate a clear inverse relationship, although the trend does not appear strictly linear.
 
+
+```{r LSTAT vs MEDV Scatterplot}
+ggplot(Boston, aes(x=lstat,y=medv)) +
+  geom_point(alpha = 0.6 , color = "blue") +
+  labs(title = "Scatterplot: LSAT vs MEDV",
+       x = "% Lower Status Population",
+       y = "Median Home Values ($1000)") +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
-### Model Implementation and Explanation
+### Perform Simple Linear Regession
 
-\<What model are we using -? Why does this model apply to the data?
+The simple linear regression model is fit using lstat as the predictor for medv. The model summary reveals the nature of the relationship between these variables.
 
-What are the pros and cons of this type of model?.
 
-### Perform simple linear regression on training data
-
-\<Describe the function and model fit
 
 ```{r linear regression}
-lm.fit = lm(medv ~ lstat,data = train_data)
+lm.fit = lm(medv ~ lstat, data = train_data)
 summary(lm.fit)
-
 ```
 
-### Could build a scatter plot with this regression line into it
+### Apply Model to Test Data
 
-Apply model to test data
+The model is applied to the test set, and both training and testing Mean Squared Errors (MSE) are computed. The training MSE is 37.39 and the test MSE is 41.86. The close values suggest that the model generalizes reasonably well to new data.
 
-\< could interpret the test MSE
-
-```{r apply model to test data}
-# Calculating Mean Squared Error (MSE)
-train_mse <- mean((train_data$medv - predict(lm.fit, train_data))^2)
-test_mse <- mean((test_data$medv - predict(lm.fit, test_data))^2)
-
-
-print(train_mse)
-print(test_mse)
-
-
-
+```{r apply model to test_data}
+train_mse = mean((train_data$medv - predict(lm.fit, train_data))^2)
+test_mse = mean((test_data$medv - predict(lm.fit, test_data))^2)
+  
+print(paste("Training MSE:", round(train_mse,2)))
+print(paste("Test MSE: ", round(test_mse,2)))
 ```
 
-### Simple linear regression and interprettion
+### Perform Multiple Linear Regression on Training Data
 
-How good is this fit
-
-Perfroming linear regression multiple
-
-\<What question does this model answer?\>
+The analysis is extended by adding the age variable to the model. In this multiple regression, the coefficient for lstat remains strongly negative while the coefficient for age is positive but small. The R-squared of 0.57 indicates that the model explains 57% of the variability in home prices, and the slight improvement in MSE suggests that the additional variable offers modest benefits.
 
 ```{r}
-lm.multiple.fit = lm(medv~lstat + age+lstat*age,data = train_data)
+lm.multiple.fit = lm(medv ~ lstat + age , data = train_data)
 summary(lm.multiple.fit)
 ```
 
-### Apply the model to test data
+### Apply the Model to Test Data
 
 ```{r}
-
-train_mse=mean((train_data$medv - predict(lm.multiple.fit,train_data))^2)
-test_mse= mean((test_data$medv - predict(lm.multiple.fit,test_data))^2)
-print(train_mse)
-print(test_mse)
+train_mse = mean((train_data$medv - predict(lm.multiple.fit, train_data))^2)
+test_mse = mean((test_data$medv - predict(lm.multiple.fit, test_data))^2)
+  
+print(paste("Training MSE:", round(train_mse,2)))
+print(paste("Test MSE: ", round(test_mse,2)))
 
 ```
 
-Multiple Linear Regression results and interpretation
+### Multiple Linear Regression Results & Interpretation
 
+The regression shows that a 1% increase in the lower status population reduces median home value by about $1,044, a result that is highly significant. In contrast, a 1% rise in older housing leads to a small increase of roughly $36, suggesting that historical or location factors may add value. The model explains 57% of the variation in home prices and offers only a minor improvement in error metrics compared to the simpler model, indicating that socioeconomic status remains the main driver of Boston housing values.
 
+## NHANES Data Analysis
 
-### Please predict BMI using Age,SmokeNow and PhysActive for individuals betweeb the ages of 18 and 70
+### Objective
 
-Data Understanding and preparation
+This analysis develops a multiple regression model to predict Body Mass Index (BMI) using data from NHANES. The predictors include age, current smoking status, and physical activity level for individuals aged between 18 and 70. The aim is to examine the combined effects of these factors on BMI.
 
-Data loading
+### Data Loading
 
 ```{r}
 library(NHANES)
-
 data(NHANES)
-SMOKERS = NHANES %>% 
-  select(BMI,Age,SmokeNow,PhysActive) %>% 
-  filter(Age >=18 & Age <=70)
+str(NHANES)
 
 ```
+
+### Data Understanding
+
+The NHANES data is imported and a subset called SMOKERS is created. This subset contains BMI, Age, SmokeNow, and PhysActive. Records are filtered to include only those between 18 and 70 years old. A check on missing values shows that 58% of SmokeNow is missing, while BMI has minimal missing entries. Mode imputation fills missing SmokeNow values, and rows with missing BMI are removed.
+
+{r}
+Copy
+
+
+```{r}
+# Load the dplyr package (or the entire tidyverse)
+#library(dplyr)
+
+# Then run your code
+SMOKERS = NHANES %>% 
+  select(BMI, Age, SmokeNow, PhysActive) %>%
+  filter(Age >= 18 & Age <= 70)
+```
+
+```{r}
+str(SMOKERS)
+```
+
+```{r unique values in PhysActive and SmokeNow}
+unique(SMOKERS[, c("PhysActive", "SmokeNow")])
+```
+
+```{r}
+# Count missing values for each column
+colSums(is.na(SMOKERS))
+```
+
+```{r}
+# percentage of missing values 
+colMeans(is.na(SMOKERS))
+```
+
+"mode imputation" 
+
+```{r}
+# Or if it's a categorical variable, replace with the most frequent value:
+SMOKERS$SmokeNow[is.na(SMOKERS$SmokeNow)] <- names(which.max(table(SMOKERS$SmokeNow, useNA = "no")))
+```
+
+```{r}
+colSums(is.na(SMOKERS))
+```
+
+```{r}
+# drop the missing values in BMI
+library(dplyr)
+SMOKERS <- SMOKERS %>% filter(!is.na(BMI))
+```
+
+```{r}
+colSums(is.na(SMOKERS))
+```
+
+### Exploratory Data Analysis
+
+The histogram for BMI reveals a right-skewed distribution, with most individuals falling between BMI 20 and 40 and a peak around 25–30. A boxplot comparing BMI by smoking status and physical activity shows that those who are physically active tend to have lower BMI values. Inactive individuals, especially non-smokers, exhibit higher median BMI and greater variability. Extreme BMI values appear among the inactive group, suggesting unusual cases that deviate from the general pattern.
+
+{r
+Copy
+
+
+```{r histogram for BMI}
+ggplot(SMOKERS, aes(x = BMI)) +
+  geom_histogram(fill = "steelblue", binwidth = 2, color="white") +
+  labs(title = "Distribution of BMI",
+       x = "BMI",
+       y = "Count") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r boxplot}
+ggplot(SMOKERS, aes(x = SmokeNow, y = BMI, fill = PhysActive)) +
+  geom_boxplot() +
+  labs(title = "BMI by Smoking Status and Physical Activity",
+       x = "Smoking Status",
+       y = "BMI") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Train-Test Split
+
+To evaluate the model reliably, the SMOKERS dataset is split into a training set (75%) and a testing set (25%). This separation ensures that the model’s performance is assessed on data not used during the fitting process.
+
+```{r}
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Create a data split (75% train, 25% test)
+SMOKERS_split = SMOKERS %>%
+  mutate(id = row_number()) %>%
+  sample_frac(0.75)
+
+# Add id to original dataset
+SMOKERS = SMOKERS %>% mutate(id = row_number())
+
+# Create train and test datasets
+train_data2 = SMOKERS_split
+test_data2 = anti_join(SMOKERS, SMOKERS_split, by = "id") # Remaining 25%
+```
+
+### Model Implementation & Explanation
+
+A multiple linear regression model is fitted on the training data, using BMI as the response variable and Age, SmokeNow, and PhysActive as predictors. The summary shows an intercept of 27.68, a small positive effect of age, a significant negative effect of being physically active, and no significant effect for smoking status. Model performance is evaluated using MSE and R-squared.
+
+{r}
+Copy
+
+```{r}
+# Fit linear regression model on training data
+model = lm(BMI ~ Age + SmokeNow + PhysActive, data = train_data2)
+
+# View model summary
+summary(model)
+```
+
+```{r}
+# Calculate MSE for training data
+train_mse2 = mean((train_data2$BMI - predict(model, train_data2))^2)
+
+# Calculate MSE for test data
+test_mse2 = mean((test_data2$BMI - predict(model, test_data2))^2)
+  
+# Print results
+print(paste("Training MSE:", round(train_mse2, 2)))
+print(paste("Test MSE:", round(test_mse2, 2)))
+
+```
+
+```{r}
+# You may also want to calculate R-squared for both sets
+train_r2 = summary(model)$r.squared
+# For test data, calculate R-squared manually
+y_test = test_data2$BMI
+y_pred = predict(model, test_data2)
+test_r2 = 1 - (sum((y_test - y_pred)^2) / sum((y_test - mean(y_test))^2))
+
+print(paste("Training R-squared:", round(train_r2, 4)))
+print(paste("Test R-squared:", round(test_r2, 4)))
+```
+## Result and Discussion
+The model predicts BMI with low accuracy, with training and test MSEs around 45.47 and 43.31 and R-squared values near 3%. The intercept is 27.68; age shows a modest increase in BMI (coefficient 0.051, p < 0.001), while being physically active reduces BMI significantly (coefficient -1.77, p < 0.001). Smoking status has no significant effect (coefficient -0.126, p = 0.604), possibly due to high missing data. A residual standard error of 6.746 indicates considerable prediction error. These results suggest that, while physical activity and age matter, other factors like diet and genetics must be considered for a more robust public health model.
+
+
+
+
+
+
+
