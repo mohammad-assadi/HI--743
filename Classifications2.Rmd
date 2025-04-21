@@ -1,0 +1,166 @@
+---
+title: "Classification_pt2"
+author: "Mohammad Assadi Shalmani"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(class)
+library(ISLR2)
+library(tidyverse)
+```
+
+
+
+This analysis extends our classification methods by exploring k-nearest neighbors (KNN) and K-means clustering approaches. While our previous models relied on parametric functions with estimated coefficients, these techniques take fundamentally different approaches. KNN makes predictions based on local patterns in the training data, while K-means identifies natural groupings in unlabeled data. Both methods rely heavily on distance metrics, making them particularly useful for capturing non-linear relationships that logistic regression might miss.
+
+The stock market presents an ideal testing ground for classification algorithms because financial markets combine clear outcome variables (like price direction) with high noise levels that challenge prediction efforts. Here I analyze the 'SMarket' dataset, which tracks daily S&P 500 movements from 2001-2005, including lagged returns and volume information that might help predict market direction.
+
+## 2. Data Import & Temporal Train/Test Split
+
+Unlike random sampling used in many machine learning contexts, financial data requires temporal splitting to prevent look-ahead bias. I use pre-2005 data for training and 2005 data for testing - mimicking how models would be deployed in real-world trading, where we train on historical data and predict future market movements.
+
+```{r}
+data("Smarket")
+smarket.tbl = as_tibble(Smarket)
+
+# Segment Data
+train = smarket.tbl %>% filter(Year < 2005) # Training is before 2005
+test = smarket.tbl %>% filter (Year = 2005)
+
+# Define predictors and response
+train.X = train %>% select(Lag1, Lag2) %>% as.matrix()
+test.X = test %>% select(Lag1, Lag2) %>% as.matrix()
+
+train.Y = train$Direction  
+test.Y = test$Direction
+
+```
+## 3. Non-Parametric Classification with KNN
+
+Unlike logistic regression which estimates a global decision boundary, KNN makes no assumptions about the underlying distribution of the data. Instead, it classifies new observations based on their proximity to known examples. This flexibility lets KNN capture complex market patterns that might elude parametric approaches.
+```{r}
+# pick k=3
+knn.pred = knn(train.X, test.X, train.Y, k=3)
+```
+
+```{r}
+conf.matrix = table(Predicted = knn.pred, Actual = test.Y)
+print(conf.matrix)
+
+# Compute Accuracy
+accuracy = mean(knn.pred == test.Y)
+accuracy
+```
+
+## 5. Tuning the Neighborhood Size Parameter
+
+The k parameter in KNN represents a critical trade-off between model stability and local sensitivity. Small k values create flexible decision boundaries that might overfit to noise in training data, while large k values smooth the boundary but might miss important local patterns. The optimal value depends on both sample size and the underlying complexity of the classification problem.
+
+```{r}
+# set.seed(123)
+knn.pred_4 = knn(train.X, test.X, train.Y, k=4)
+mean(knn.pred_4 == test.Y)
+
+knn.pred_5 = knn(train.X, test.X, train.Y, k=5)
+mean(knn.pred_5 == test.Y)
+
+knn.pred_6 = knn(train.X, test.X, train.Y, k=6)
+mean(knn.pred_6 == test.Y)
+```
+
+## 6. Systematic Parameter Tuning
+
+Rather than arbitrarily selecting a k value, I implement a methodical approach to identify the optimal neighborhood size. By testing performance across multiple k values and averaging over repeated trials, we can identify the point where the model balances between underfitting and overfitting. This empirical approach addresses KNN's sensitivity to the k parameter.
+
+```{r}
+train.X = scale(train.X)
+test.X = scale(test.X)
+
+# Function to compute average error for a given K over multiple itterations
+computer_avg_error = function(k, num_iter = 50) {
+  errors = replicate(num_iter, {
+    knn_pred = knn(train.X, test.X, train.Y, k=k)
+    mean(knn_pred != test.Y) #Misclassification
+  })
+}
+
+# Compute error for different values of k
+k_values = tibble(K = seq(1,20, by 1)) %>% 
+  mutate(Avg_Error_Rate = map_dbl(K, ~ computer_avg_error(.x,num_iter = 100)))
+
+```
+
+
+```{r}
+# Plot the averaged error rates
+ggplot(k_values, aes(x=K, y=Avg_Error_Rate)) +
+  geom_line(color = 'blue')+
+  geom_point(size = 2) +
+  labs(title = "Vizualization Optimal K in KNN (Error)",
+       x = "Number of Neighbors (K)",
+       y = "Average Misclassification Error Rate")
+```
+
+# K-Means Clustering: Moving Beyond Supervised Learning
+
+While classification methods require labeled training data, K-means clustering discovers natural patterns without labeled examples. This unsupervised approach groups observations based solely on feature similarity, making it valuable for market segmentation, anomaly detection, and identifying hidden structures in financial data. K-means partitions observations into k groups where each observation belongs to the cluster with the nearest centroid.
+
+```{r}
+x,tbl = tibble(
+  X1 = rnorm(50)
+  X2 = rnorm(50)
+)
+
+x.tbl = x.tbl %>% 
+  mutate(X1 = ifelse(row_number() <= 25,X1 + 3, X1),
+         X2 = ifelse(row_number() <= 25, X2 -4, X2))
+        
+```
+
+## 2. Implementing K-Means Algorithm
+
+The K-means algorithm iteratively assigns points to clusters and recalculates centroids until convergence. The 'nstart' parameter is crucial - it runs the algorithm multiple times from different random starting points to avoid local minima. This recognizes that K-means results depend heavily on initial centroid placement, a limitation not present in hierarchical clustering methods.
+```{r}
+# k = 4
+km.out = kmeans(x.tbl, center = 4, nstart = 20)
+
+x.tbl = x.tbl %>% 
+  mutate(Cluster = as.factor(km.out$cluster))
+```
+
+## 3. Visualizing Cluster Structures
+
+Visual representation provides critical insight into cluster quality and separation. Well-formed clusters appear as distinct, non-overlapping groups, while poor clustering shows substantial overlap between groups. Visualizations also help identify outliers and reveal whether the chosen k-value appropriately captures the dataset's natural structure.
+```{r}
+ggplot(x.tbl, aes(x=X1, y=X2, color = Cluster)) +
+  geom_point(size = 3) +
+  labs(title = "K-Means Clustering Results (k=4)")
+```
+
+## 4. Determining Optimal Cluster Count via Elbow Method
+
+Selecting the appropriate number of clusters presents a fundamental challenge in unsupervised learning. The elbow method plots within-cluster sum of squares against increasing k values. The optimal k typically appears as an "elbow" point where adding more clusters yields diminishing returns in reducing variance. This approach balances model complexity against explanatory power without requiring labeled data.
+
+```{r}
+elbow = tibble(K = 1:20) %>% 
+  mutate(Total_WSS = map_dbl(k, ~kmeans(x.tbl %>% select(X1,X2), centers = .x,nstart=20)$tot.withinss))
+
+ggplot(elbow, aes(x=K, y = Total_WSS))+
+  geom_line() +
+  geom_point() +
+  scale_x_continous(breaks = 1:20)+
+  labs(title = "Elbow Plot of Optimal K",
+       x = "Number of Clusters(K)",
+       y = "Total Within-Cluster Sum of Squares")
+
+```
+
+
